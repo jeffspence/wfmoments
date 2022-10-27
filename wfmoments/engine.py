@@ -41,6 +41,23 @@ def build_deme_index(num_demes):
 
 
 def build_1d_spatial(theta, migration_rate, num_demes):
+    """
+    Get the coefficients of the ODE system for a 1D spatial model
+
+    Considers a model where all of the demes are in a single chain, and
+    migration only occurs between adjacent demes at a constant rate.
+
+    Args:
+        theta: population scaled mutation rate
+        migration_rate: population scaled migration rate between adjacent demes
+        num_demes: number of demes in the chain
+
+    Returns:
+        (M, v) where the dynamics of the second moments, x, are described by
+        the ODE dx/dt = M @ x + v.  That is, M is the matrix of coefficients
+        of the terms in the ODE that multiply the current second moments and
+        v is the additive, constant terms in the ODE.
+    """
     idx_to_deme, deme_to_idx = build_deme_index(num_demes)
     sq_num_demes = len(idx_to_deme)
     moment_mat = scipy.sparse.dok_matrix((sq_num_demes, sq_num_demes),
@@ -75,6 +92,25 @@ def build_1d_spatial(theta, migration_rate, num_demes):
 
 
 def build_2d_index(xlen, ylen):
+    """
+    Creates a map to and from deme indices for a 2D spatial model
+
+    In a 2D spatial model, it makes sense to describe each deme by its latitude
+    and longitude. We need to map this to arbitrary deme models where we just
+    number demes from 1 to number of demes. This function creates maps to and
+    from latitude and longitude to "deme index".
+
+    Args:
+        xlen: how many demes across is the space
+        ylen: how many demes from top to bottom is the space
+
+    Returns:
+        (lat_lon_map, inverse_lat_lon_map), where lat_lon_map takes a
+        "deme index" and then returns the latitude and longitude corresponding
+        to that deme, and inverse_lat_lon_map takes a tuple of latitude and
+        longitude and returns the deme index for the deme at that spatial
+        position.
+    """
     idx_to_xy = []
     xy_to_idx = {}
     for i in range(xlen):
@@ -85,6 +121,24 @@ def build_2d_index(xlen, ylen):
 
 
 def build_2d_spatial(theta, migration_rate, xlen, ylen):
+    """
+    Get the coefficients of the ODE system for a 2D spatial model
+
+    Considers a model where demes are arrayed in a 2D grid, and migration only
+    occurs between adjacen demes at a constant rate.
+
+    Args:
+        theta: population scaled mutation rate
+        migration_rate: population scaled migration rate between adjacent demes
+        xlen: how wide the habitat is in terms of number of demes
+        ylen: how long the habitat is in terms of number of demes
+
+    Returns:
+        (M, v) where the dynamics of the secondmoments, x, are described by the
+        ODE dx/dt = M @ x + v. That is, M is hte matrix of coefficients of the
+        terms in the ODE that multiply the current second moments and v is the
+        additive, constant terms in the ODE.
+    """
     idx_to_xy, xy_to_idx = build_2d_index(xlen, ylen)
     idx_to_deme, deme_to_idx = build_deme_index(xlen*ylen)
     sq_num_demes = len(idx_to_deme)
@@ -150,6 +204,21 @@ def build_2d_spatial(theta, migration_rate, xlen, ylen):
 
 
 def build_1d_laplace(num_demes, m):
+    """
+    Construct a migration matrix for a 1D chain with homogenous migration
+
+    Assumes that demes are spatially ordered 1, ..., num_demes, migration
+    only occurs between adjacent demes with constant rate m and then
+    constructs the corresponding num_demes x num_demes migration matrix.
+
+    Args:
+        num_demes: the number of demes
+        m: the population scaled migration raet
+
+    Returns:
+        A num_demes by num_demes numpy array where entry i, j is the migration
+        rate between demes i and j.
+    """
     to_return = np.zeros((num_demes, num_demes))
     for i in range(num_demes):
         if i > 0:
@@ -162,6 +231,22 @@ def build_1d_laplace(num_demes, m):
 
 
 def build_2d_laplace(xlen, ylen, m):
+    """
+    Construct a migration matrix for a 2D spatial model
+
+    Assumes that demes are ordered according to build_2d_index and that
+    migration only occurs between adjacent demes (demes that differ by
+    latitude or longitude (but not both) by 1).
+
+    Args:
+        xlen: how many demes across is the space
+        ylen: how many demes from tp to bottom is the space
+
+    Returns:
+        A (xlen * ylen) by (xlen * ylen) numpy array where entry i, j is the
+        migration rate between deme i and deme j, where the demes are ordered
+        according to build_2d_index.
+    """
     num_demes = xlen * ylen
     to_return = np.zeros((num_demes, num_demes))
     idx_to_xy, xy_to_idx = build_2d_index(xlen, ylen)
@@ -189,6 +274,22 @@ def build_2d_laplace(xlen, ylen, m):
 
 
 def build_arbitrary(theta, m_mat):
+    """
+    Get the coefficients of the ODE system for an arbitrary deme model
+
+    Args:
+        theta: population scaled mutation rate
+        m_mat: a numpy array where entry i, j is the population scaled
+            migration rate from demes i to j. Must be a rate matrix:
+            all off-diagonals must be non-negative and rows must sum to zero.
+
+    Returns:
+        (M, v) where the dynamics of the second moments, x, are described by
+        the ODE dx/dt = M @ x + v. That is, M is the matrix of coefficients of
+        the terms in the ODE that multiply the current second moments and v is
+        the additive, constant terms in the ODE.
+
+    """
     assert len(m_mat.shape) == 2
     assert m_mat.shape[0] == m_mat.shape[1]
     assert np.allclose(m_mat.sum(axis=1), 0)
@@ -215,10 +316,43 @@ def build_arbitrary(theta, m_mat):
 
 
 def compute_equilibrium(moment_mat, const_vec):
+    """
+    Get the equilibrium of a linear ODE
+
+    Solves the steady state of a linear ODE on a variable x described by
+    dx/dt = moment_mat @ x + const_vec.
+
+    Args:
+        moment_mat: the matrix of coefficients of the terms in the ODE that
+            multiply x.
+        const_vec: the vector of constant additive terms in the ODE.
+
+    Returns:
+        A 1d numpy array containing the equilibrium solution of the ODE
+
+    """
     return scipy.sparse.linalg.spsolve(moment_mat, -const_vec)
 
 
 def evolve_forward(moment_mat, const_vec, curr_moments, time):
+    """
+    Solve an ODE forward for a set amount of time
+
+    Integrates a linear ODE described by
+    d(curr_moments)/dt = moment_mat @ curr_moments + const_vec
+    forward in time.
+
+    Args:
+        moment_mat: the matrix of coefficients of the terms in the ODE that
+            multiply curr_moments.
+        const_vec: the vector of constant additive terms in the ODE.
+        curr_moments: the current second moments of the model
+        time: the amount of time to integrate the ODE forward
+
+    Returns:
+        A 1d numpy array containing the second moments after evolving forward
+        for time amount of time.
+    """
     m_inv_v = -compute_equilibrium(moment_mat, const_vec)
     evolved = scipy.sparse.linalg.expm_multiply(
         moment_mat * time, curr_moments + m_inv_v
@@ -226,12 +360,25 @@ def evolve_forward(moment_mat, const_vec, curr_moments, time):
     return evolved - m_inv_v
 
 
-def num_demes_from_moments(k):
+def num_demes_from_num_moments(k):
+    """Get the number of demes from the number of second moments"""
     return int(round(0.5 * (np.sqrt(8*k + 1) - 1)))
 
 
 def compute_pi(curr_moments, demes):
-    num_demes = num_demes_from_moments(len(curr_moments))
+    """
+    Compute the average heterozygosity from the second moments of demes
+
+    Args:
+        curr_moments: a 1d numpy array of the second moments of the allele
+            frequencies across all demes
+        demes: a list of the demes from which individuals should be sampled.
+
+    Returns:
+        The average pairwise heterozygosity when individuals are uniformly
+        sampled from the specified demes.
+    """
+    num_demes = num_demes_from_num_moments(len(curr_moments))
     idx_to_deme, deme_to_idx = build_deme_index(num_demes)
 
     total_pi = 0.
@@ -244,8 +391,30 @@ def compute_pi(curr_moments, demes):
 
 
 def reseed(indices_to_reseed, source_indices, curr_moments):
+    """
+    Replace the individuals in a set of demes with individuals from other demes
+
+    Takes a set of current second moments and computes what the second moments
+    would be if we were to replace all of the individuals in one set of demes
+    with a random sample of individuals from another set of demes.
+
+    Args:
+        indices_to_reseed: a list of the demes whose individuals will be
+            replaced.
+        source_indices: a list of the demes from which to sample the
+            individuals used to reseed the demes specified by
+            indices_to_reseed.
+        curr_moments: a 1d numpy array of the second moments of the allele
+            frequencies across all demes.
+
+    Returns:
+        a 1d numpy array containing the second moments of the allele
+        frequencies across all demes after the individuals in
+        indices_to_reseed have been replace by individuals chosen at random
+        from source_indices.
+    """
     curr_moments = np.copy(curr_moments)
-    num_demes = num_demes_from_moments(len(curr_moments))
+    num_demes = num_demes_from_num_moments(len(curr_moments))
     idx_to_deme, deme_to_idx = build_deme_index(num_demes)
 
     inner_moments = 0.
@@ -269,9 +438,25 @@ def reseed(indices_to_reseed, source_indices, curr_moments):
 
 
 def get_moments(curr_moments, demes):
+    """
+    Get the second moments for a (sub)set of demes
+
+    From an array of second moments, we may want to pull out only those second
+    moments that correspond to pairs of demes both within some subset.
+
+    Args:
+        curr_moments: a 1d numpy array of the second moments of the allele
+            frequencies across all demes.
+        demes: a list of the demes for which we want second moments that only
+            invole these demes
+
+    Returns:
+        a 1d numpy array containing the second moments of the allele
+        frequencies across only pairs of demes from the provided list demes.
+    """
     new_idx_to_deme, new_deme_to_idx = build_deme_index(len(demes))
     old_idx_to_deme, old_deme_to_idx = build_deme_index(
-        num_demes_from_moments(len(curr_moments))
+        num_demes_from_num_moments(len(curr_moments))
     )
     to_return = np.zeros(len(new_idx_to_deme))
     for new_idx in range(len(to_return)):
