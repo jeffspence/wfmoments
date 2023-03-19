@@ -93,13 +93,13 @@ def test_compute_equilibrium():
         assert np.all(eq > 0)
 
 
-def test_num_demes_from_moments():
+def test_num_demes_from_num_moments():
     for i in range(1, 100):
         k = (i * (i+1)) // 2
-        assert wfmoments.num_demes_from_moments(k) == i
+        assert wfmoments.num_demes_from_num_moments(k) == i
     i = 100000
     k = (i * (i+1)) // 2
-    assert wfmoments.num_demes_from_moments(k) == i
+    assert wfmoments.num_demes_from_num_moments(k) == i
 
 
 def test_build_1d_laplace():
