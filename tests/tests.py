@@ -91,6 +91,44 @@ def test_build_2d_spatial():
     assert np.allclose(m.dot(x), m_check.dot(x))
     assert np.allclose(v, v_check)
 
+    # test extincting some demes
+    extinct_demes = np.ones((5, 7), dtype=bool)
+    extinct_demes[:, 0] = False
+
+    m_ex, v_ex = wfmoments.build_2d_spatial(
+        1e-1, 1e-2, 5, 7, extinct_demes=extinct_demes
+    )
+    m_1d, v_1d = wfmoments.build_1d_spatial(1e-1, 1e-2, 5)
+    x_short = np.random.random(m_ex.shape[1])
+    assert np.allclose(m_ex.dot(x_short), m_1d.dot(x_short))
+    assert np.allclose(v_ex, v_1d)
+
+    extinct_demes = np.random.choice([False, True], size=(5, 7))
+    m_ex, v_ex = wfmoments.build_2d_spatial(
+        1e-1, 1e-2, 5, 7, extinct_demes=extinct_demes
+    )
+    x_short = np.random.random(m_ex.shape[1])
+
+    kept_demes = np.zeros(m_mat.shape[0], dtype=bool)
+    idx_to_xy, _ = wfmoments.build_2d_index(5, 7)
+    for idx in range(m_mat.shape[0]):
+        i, j = idx_to_xy[idx]
+        if extinct_demes[i, j]:
+            continue
+        kept_demes[idx] = True
+    m_mat_restricted = m_mat[np.ix_(kept_demes, kept_demes)]
+    m_mat_restricted[
+        np.arange(m_mat_restricted.shape[0]),
+        np.arange(m_mat_restricted.shape[0])
+    ] = 0
+    m_mat_restricted[
+        np.arange(m_mat_restricted.shape[0]),
+        np.arange(m_mat_restricted.shape[0])
+    ] = - m_mat_restricted.sum(axis=1)
+    m_check, v_check = wfmoments.build_arbitrary(1e-1, m_mat_restricted)
+    assert np.allclose(m_ex.dot(x_short), m_check.dot(x_short))
+    assert np.allclose(v_ex, v_check)
+
 
 # also tests compute_equilibrium
 def test_evolve_forward():

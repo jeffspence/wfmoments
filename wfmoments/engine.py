@@ -100,7 +100,7 @@ def build_1d_spatial(theta, migration_rate, num_demes, pop_sizes=1.):
     return moment_mat.tocsr(), const_vec
 
 
-def build_2d_index(xlen, ylen):
+def build_2d_index(xlen, ylen, extinct_demes=None):
     """
     Creates a map to and from deme indices for a 2D spatial model
 
@@ -112,6 +112,11 @@ def build_2d_index(xlen, ylen):
     Args:
         xlen: how many demes across is the space
         ylen: how many demes from top to bottom is the space
+        extinct_demes: numpy array of shape (xlen, ylen) where entry i, j is
+            True if the deme at spatial position i, j is totally extinct,
+            otherwise False. Defaults to None, in which case there are not
+            extinct demes.
+
 
     Returns:
         (lat_lon_map, inverse_lat_lon_map), where lat_lon_map takes a
@@ -120,16 +125,29 @@ def build_2d_index(xlen, ylen):
         longitude and returns the deme index for the deme at that spatial
         position.
     """
+    if extinct_demes is None:
+        extinct_demes = np.zeros((xlen, ylen), dtype=bool)
+    assert extinct_demes.shape == (xlen, ylen)
+
     idx_to_xy = []
     xy_to_idx = {}
     for i in range(xlen):
         for j in range(ylen):
+            if extinct_demes[i, j]:
+                continue
             xy_to_idx[(i, j)] = len(idx_to_xy)
             idx_to_xy.append((i, j))
     return idx_to_xy, xy_to_idx
 
 
-def build_2d_spatial(theta, migration_rate, xlen, ylen, pop_sizes=1.):
+def build_2d_spatial(
+    theta,
+    migration_rate,
+    xlen,
+    ylen,
+    pop_sizes=1.,
+    extinct_demes=None
+):
     """
     Get the coefficients of the ODE system for a 2D spatial model
 
@@ -144,7 +162,10 @@ def build_2d_spatial(theta, migration_rate, xlen, ylen, pop_sizes=1.):
         pop_sizes: scaled population sizes for each deme. If scalar, then all
             demes have the same size, otherwise it should be a numpy array of
             shape (xlen, ylen). Defaults to all demes having size 1.
-
+        extinct_demes: numpy array of shape (xlen, ylen) where entry i, j is
+            True if the deme at spatial position i, j is totally extinct,
+            otherwise False. Defaults to None, in which case there are not
+            extinct demes.
 
     Returns:
         (M, v) where the dynamics of the secondmoments, x, are described by the
@@ -155,19 +176,28 @@ def build_2d_spatial(theta, migration_rate, xlen, ylen, pop_sizes=1.):
 
     assert np.all(pop_sizes > 0)
 
+    if extinct_demes is None:
+        extinct_demes = np.zeros((xlen, ylen), dtype=bool)
+    assert extinct_demes.shape == (xlen, ylen)
+
     deme_pop_sizes = np.zeros((xlen, ylen))
     deme_pop_sizes[:, :] = pop_sizes
 
-    idx_to_xy, xy_to_idx = build_2d_index(xlen, ylen)
-    idx_to_deme, deme_to_idx = build_deme_index(xlen*ylen)
+    idx_to_xy, xy_to_idx = build_2d_index(xlen, ylen, extinct_demes)
+    idx_to_deme, deme_to_idx = build_deme_index(len(idx_to_xy))
     sq_num_demes = len(idx_to_deme)
     moment_mat = scipy.sparse.dok_matrix((sq_num_demes, sq_num_demes),
                                          dtype=np.float64)
     const_vec = np.ones(sq_num_demes, dtype=np.float64) * theta/2
     for x1 in range(xlen):
         for y1 in range(ylen):
+            if extinct_demes[x1, y1]:
+                continue
             for x2 in range(xlen):
                 for y2 in range(ylen):
+                    if extinct_demes[x2, y2]:
+                        continue
+
                     idx1 = xy_to_idx[(x1, y1)]
                     idx2 = xy_to_idx[(x2, y2)]
                     if idx2 < idx1:
@@ -180,42 +210,42 @@ def build_2d_spatial(theta, migration_rate, xlen, ylen, pop_sizes=1.):
                         )
                         const_vec[this_idx] += 0.5 / deme_pop_sizes[x1, y1]
                     # migration
-                    if x1 > 0:
+                    if x1 > 0 and not extinct_demes[x1-1, y1]:
                         my_idx = deme_to_idx[(xy_to_idx[(x1-1, y1)],
                                               idx2)]
                         moment_mat[this_idx, my_idx] += migration_rate
                         moment_mat[this_idx, this_idx] -= migration_rate
-                    if y1 > 0:
+                    if y1 > 0 and not extinct_demes[x1, y1-1]:
                         my_idx = deme_to_idx[(xy_to_idx[(x1, y1-1)],
                                               idx2)]
                         moment_mat[this_idx, my_idx] += migration_rate
                         moment_mat[this_idx, this_idx] -= migration_rate
-                    if x1 < xlen - 1:
+                    if x1 < xlen - 1 and not extinct_demes[x1+1, y1]:
                         my_idx = deme_to_idx[(xy_to_idx[(x1+1, y1)],
                                               idx2)]
                         moment_mat[this_idx, my_idx] += migration_rate
                         moment_mat[this_idx, this_idx] -= migration_rate
-                    if y1 < ylen - 1:
+                    if y1 < ylen - 1 and not extinct_demes[x1, y1+1]:
                         my_idx = deme_to_idx[(xy_to_idx[(x1, y1+1)],
                                               idx2)]
                         moment_mat[this_idx, my_idx] += migration_rate
                         moment_mat[this_idx, this_idx] -= migration_rate
-                    if x2 > 0:
+                    if x2 > 0 and not extinct_demes[x2-1, y2]:
                         my_idx = deme_to_idx[(xy_to_idx[(x2-1, y2)],
                                               idx1)]
                         moment_mat[this_idx, my_idx] += migration_rate
                         moment_mat[this_idx, this_idx] -= migration_rate
-                    if y2 > 0:
+                    if y2 > 0 and not extinct_demes[x2, y2-1]:
                         my_idx = deme_to_idx[(xy_to_idx[(x2, y2-1)],
                                               idx1)]
                         moment_mat[this_idx, my_idx] += migration_rate
                         moment_mat[this_idx, this_idx] -= migration_rate
-                    if x2 < xlen - 1:
+                    if x2 < xlen - 1 and not extinct_demes[x2+1, y2]:
                         my_idx = deme_to_idx[(xy_to_idx[(x2+1, y2)],
                                               idx1)]
                         moment_mat[this_idx, my_idx] += migration_rate
                         moment_mat[this_idx, this_idx] -= migration_rate
-                    if y2 < ylen - 1:
+                    if y2 < ylen - 1 and not extinct_demes[x2, y2+1]:
                         my_idx = deme_to_idx[(xy_to_idx[(x2, y2+1)],
                                               idx1)]
                         moment_mat[this_idx, my_idx] += migration_rate
