@@ -40,7 +40,7 @@ def build_deme_index(num_demes):
     return to_return, to_return_inv
 
 
-def build_1d_spatial(theta, migration_rate, num_demes):
+def build_1d_spatial(theta, migration_rate, num_demes, pop_sizes=1.):
     """
     Get the coefficients of the ODE system for a 1D spatial model
 
@@ -51,6 +51,9 @@ def build_1d_spatial(theta, migration_rate, num_demes):
         theta: population scaled mutation rate
         migration_rate: population scaled migration rate between adjacent demes
         num_demes: number of demes in the chain
+        pop_sizes: scaled population sizes for each deme. If scalar, then all
+            demes have the same size, otherwise it should be a numpy array of
+            shape (num_demes,). Defaults to all demes having size 1.
 
     Returns:
         (M, v) where the dynamics of the second moments, x, are described by
@@ -58,6 +61,12 @@ def build_1d_spatial(theta, migration_rate, num_demes):
         of the terms in the ODE that multiply the current second moments and
         v is the additive, constant terms in the ODE.
     """
+
+    assert np.all(pop_sizes > 0)
+
+    deme_pop_sizes = np.zeros(num_demes)
+    deme_pop_sizes[:] = pop_sizes
+
     idx_to_deme, deme_to_idx = build_deme_index(num_demes)
     sq_num_demes = len(idx_to_deme)
     moment_mat = scipy.sparse.dok_matrix((sq_num_demes, sq_num_demes),
@@ -68,8 +77,8 @@ def build_1d_spatial(theta, migration_rate, num_demes):
             this_idx = deme_to_idx[(i, j)]
             moment_mat[this_idx, this_idx] = -2*theta
             if i == j:
-                moment_mat[this_idx, this_idx] -= 1.
-                const_vec[this_idx] += 0.5
+                moment_mat[this_idx, this_idx] -= 1. / deme_pop_sizes[i]
+                const_vec[this_idx] += 0.5 / deme_pop_sizes[i]
             # migration
             if i > 0:
                 im1_idx = deme_to_idx[(i-1, j)]
@@ -120,7 +129,7 @@ def build_2d_index(xlen, ylen):
     return idx_to_xy, xy_to_idx
 
 
-def build_2d_spatial(theta, migration_rate, xlen, ylen):
+def build_2d_spatial(theta, migration_rate, xlen, ylen, pop_sizes=1.):
     """
     Get the coefficients of the ODE system for a 2D spatial model
 
@@ -132,6 +141,10 @@ def build_2d_spatial(theta, migration_rate, xlen, ylen):
         migration_rate: population scaled migration rate between adjacent demes
         xlen: how wide the habitat is in terms of number of demes
         ylen: how long the habitat is in terms of number of demes
+        pop_sizes: scaled population sizes for each deme. If scalar, then all
+            demes have the same size, otherwise it should be a numpy array of
+            shape (xlen, ylen). Defaults to all demes having size 1.
+
 
     Returns:
         (M, v) where the dynamics of the secondmoments, x, are described by the
@@ -139,6 +152,12 @@ def build_2d_spatial(theta, migration_rate, xlen, ylen):
         terms in the ODE that multiply the current second moments and v is the
         additive, constant terms in the ODE.
     """
+
+    assert np.all(pop_sizes > 0)
+
+    deme_pop_sizes = np.zeros((xlen, ylen))
+    deme_pop_sizes[:, :] = pop_sizes
+
     idx_to_xy, xy_to_idx = build_2d_index(xlen, ylen)
     idx_to_deme, deme_to_idx = build_deme_index(xlen*ylen)
     sq_num_demes = len(idx_to_deme)
@@ -156,8 +175,10 @@ def build_2d_spatial(theta, migration_rate, xlen, ylen):
                     this_idx = deme_to_idx[(idx1, idx2)]
                     moment_mat[this_idx, this_idx] = -2*theta
                     if idx1 == idx2:
-                        moment_mat[this_idx, this_idx] -= 1.0
-                        const_vec[this_idx] += 0.5
+                        moment_mat[this_idx, this_idx] -= (
+                            1. / deme_pop_sizes[x1, y1]
+                        )
+                        const_vec[this_idx] += 0.5 / deme_pop_sizes[x1, y1]
                     # migration
                     if x1 > 0:
                         my_idx = deme_to_idx[(xy_to_idx[(x1-1, y1)],
@@ -273,7 +294,7 @@ def build_2d_laplace(xlen, ylen, m):
     return to_return
 
 
-def build_arbitrary(theta, m_mat):
+def build_arbitrary(theta, m_mat, pop_sizes=1.):
     """
     Get the coefficients of the ODE system for an arbitrary deme model
 
@@ -282,6 +303,10 @@ def build_arbitrary(theta, m_mat):
         m_mat: a numpy array where entry i, j is the population scaled
             migration rate from demes i to j. Must be a rate matrix:
             all off-diagonals must be non-negative and rows must sum to zero.
+        pop_sizes: scaled population sizes for each deme. If scalar, then all
+            demes have the same size, otherwise it should be a numpy array of
+            shape (num_demes,). Defaults to all demes having size 1.
+
 
     Returns:
         (M, v) where the dynamics of the second moments, x, are described by
@@ -290,9 +315,14 @@ def build_arbitrary(theta, m_mat):
         the additive, constant terms in the ODE.
 
     """
+    assert np.all(pop_sizes > 0.)
     assert len(m_mat.shape) == 2
     assert m_mat.shape[0] == m_mat.shape[1]
     assert np.allclose(m_mat.sum(axis=1), 0)
+
+    deme_pop_sizes = np.zeros(m_mat.shape[0])
+    deme_pop_sizes[:] = pop_sizes
+
     num_demes = m_mat.shape[0]
     idx_to_deme, deme_to_idx = build_deme_index(num_demes)
     sq_num_demes = len(idx_to_deme)
@@ -304,8 +334,8 @@ def build_arbitrary(theta, m_mat):
             this_idx = deme_to_idx[(i, j)]
             moment_mat[this_idx, this_idx] = -2*theta
             if i == j:
-                moment_mat[this_idx, this_idx] -= 1.0
-                const_vec[this_idx] += 0.5
+                moment_mat[this_idx, this_idx] -= 1 / deme_pop_sizes[i]
+                const_vec[this_idx] += 0.5 / deme_pop_sizes[i]
             for k in range(num_demes):
                 ki_idx = deme_to_idx[(k, i)]
                 kj_idx = deme_to_idx[(k, j)]

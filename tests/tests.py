@@ -28,6 +28,29 @@ def test_build_1d_spatial():
     assert np.allclose(m.dot(x), m_check.dot(x))
     assert np.allclose(v, v_check)
 
+    m_pop, v_pop = wfmoments.build_1d_spatial(1e-1, 1e-2, 10, 1.)
+    assert np.allclose(m_pop.dot(x), m.dot(x))
+    assert np.allclose(v_pop, v)
+
+    m_array, v_array = wfmoments.build_1d_spatial(
+        1e-1, 1e-2, 10, np.ones(10)
+    )
+    assert np.allclose(m_pop.dot(x), m_array.dot(x))
+    assert np.allclose(v_pop, v_array)
+
+    m_big, v_big = wfmoments.build_1d_spatial(1e-2, 1e-3, 10, 10.)
+    orig_eq = wfmoments.compute_equilibrium(m, v)
+    new_eq = wfmoments.compute_equilibrium(m_big, v_big)
+    assert np.allclose(orig_eq, new_eq)
+
+    pop_sizes = np.random.random(10) + 1
+    m_array, v_array = wfmoments.build_1d_spatial(
+        1e-1, 1e-2, 10, pop_sizes
+    )
+    m_arb, v_arb = wfmoments.build_arbitrary(1e-1, m_mat, pop_sizes)
+    assert np.allclose(m_array.dot(x), m_arb.dot(x))
+    assert np.allclose(v_array, v_arb)
+
 
 def test_build_2d_index():
     idx_to_xy, xy_to_idx = wfmoments.build_2d_index(5, 7)
@@ -46,6 +69,25 @@ def test_build_2d_spatial():
     m_mat = wfmoments.build_2d_laplace(5, 7, 1e-2)
     m_check, v_check = wfmoments.build_arbitrary(1e-1, m_mat)
     x = np.random.random(m.shape[1])
+    assert np.allclose(m.dot(x), m_check.dot(x))
+    assert np.allclose(v, v_check)
+
+    m_pop, v_pop = wfmoments.build_2d_spatial(1e-1, 1e-2, 5, 7, 1.)
+    assert np.allclose(m_pop.dot(x), m.dot(x))
+    assert np.allclose(v_pop, v)
+
+    m_big, v_big = wfmoments.build_2d_spatial(1e-2, 1e-3, 5, 7, 10.)
+    orig_eq = wfmoments.compute_equilibrium(m, v)
+    new_eq = wfmoments.compute_equilibrium(m_big, v_big)
+    assert np.allclose(orig_eq, new_eq)
+
+    pop_sizes = np.random.random((5, 7)) + 1
+    m, v = wfmoments.build_2d_spatial(1e-1, 1e-2, 5, 7, pop_sizes)
+    check_idx_map, _ = wfmoments.build_2d_index(5, 7)
+    flat_pop_sizes = np.zeros(35)
+    for i in range(35):
+        flat_pop_sizes[i] = pop_sizes[check_idx_map[i]]
+    m_check, v_check = wfmoments.build_arbitrary(1e-1, m_mat, flat_pop_sizes)
     assert np.allclose(m.dot(x), m_check.dot(x))
     assert np.allclose(v, v_check)
 
