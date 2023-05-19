@@ -104,6 +104,7 @@ def test_build_2d_spatial():
     assert np.allclose(v_ex, v_1d)
 
     extinct_demes = np.random.choice([False, True], size=(5, 7))
+    extinct_demes[0, 0] = False  # make sure at least one deme is still there
     m_ex, v_ex = wfmoments.build_2d_spatial(
         1e-1, 1e-2, 5, 7, extinct_demes=extinct_demes
     )
