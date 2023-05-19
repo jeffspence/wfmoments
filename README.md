@@ -9,7 +9,7 @@ second moments and heterozygosities.
 
 ### Installation
 
-Install using `pip`.  `wfmoments` required `numpy` and `scipy`.  They will be automatically installed and updated
+Install using `pip`.  `wfmoments` requires `numpy` and `scipy`.  They will be automatically installed and updated
 if you have not yet installed them.  To install, simply type:
 
 `pip install git+https://github.com/jeffspence/wfmoments`
