@@ -450,6 +450,88 @@ def compute_pi(curr_moments, demes):
     return total_pi
 
 
+def compute_fst_hudson(curr_moments, demes_1, demes_2):
+    """
+    Compute Hudson's Fst between demes_1 and demes_2
+
+    Args:
+        curr_moments: a 1d numpy array of the second moments of the allele
+            frequencies across all demes
+        demes_1: a list of the demes from which the first set of individuals
+            should be drawn.
+        demes_2: a list of the demes from which the second set of individuals
+            should be drawn.
+
+    Returns:
+        Hudson's Fst between the set of individuals in demes_1 and demes_2.
+        This estimator does not weight by population size, so pi_within is just
+        the average of pi in deme_1 and pi in deme_2.
+    """
+
+    # make sure these are separate demes
+    assert len(set(demes_1).intersection(set(demes_2))) == 0
+
+    curr_moments = np.copy(curr_moments)
+
+    pi_within_1 = compute_pi(curr_moments, demes_1)
+    pi_within_2 = compute_pi(curr_moments, demes_2)
+    pi_within = 0.5 * (pi_within_1 + pi_within_2)
+
+    num_demes = num_demes_from_num_moments(len(curr_moments))
+    idx_to_deme, deme_to_idx = build_deme_index(num_demes)
+    pi_between = 0.
+    for i in demes_1:
+        for j in demes_2:
+            # The next line of code is based on the following algebraic
+            # simplification
+            # E[p_1 * (1-p_2) + (1-p_1) * p_2]
+            # = E[p_1 + p_2 - 2 * p_1 * p_2]
+            # = 0.5 + 0.5 - 2 * second_moment
+            pi_between += 1 - 2 * curr_moments[deme_to_idx[(i, j)]]
+
+    pi_between = pi_between / len(demes_1) / len(demes_2)
+    return 1. - pi_within / pi_between
+
+
+def compute_fst_nei(curr_moments, demes_1, demes_2):
+    """
+    Compute Nei's Fst between demes_1 and demes_2
+
+    Args:
+        curr_moments: a 1d numpy array of the second moments of the allele
+            frequencies across all demes
+        demes_1: a list of the demes from which the first set of individuals
+            should be drawn.
+        demes_2: a list of the demes from which the second set of individuals
+            should be drawn.
+
+    Returns:
+        Nei's Fst between the set of individuals in demes_1 and demes_2.
+        Assumes that the number of individuals is the same across all demes.
+        That is, pi_within and pi_total are weighted by the number of demes
+        within each set of demes.
+    """
+
+    # make sure these are separate demes
+    assert len(set(demes_1).intersection(set(demes_2))) == 0
+
+    all_demes = list(demes_1) + list(demes_2)
+
+    curr_moments = np.copy(curr_moments)
+
+    pi_within_1 = compute_pi(curr_moments, demes_1)
+    pi_within_2 = compute_pi(curr_moments, demes_2)
+
+    pi_within = (
+        pi_within_1 * len(demes_1) / len(all_demes)
+        + pi_within_2 * len(demes_2) / len(all_demes)
+    )
+
+    pi_total = compute_pi(curr_moments, all_demes)
+
+    return 1. - pi_within / pi_total
+
+
 def reseed(indices_to_reseed, source_indices, curr_moments):
     """
     Replace the individuals in a set of demes with individuals from other demes

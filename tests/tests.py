@@ -224,6 +224,93 @@ def test_compute_pi():
         curr_pi = pi
 
 
+def test_compute_fst_nei():
+    m, v = wfmoments.build_1d_spatial(1e-3, 1e-3, 2)
+    eq = wfmoments.compute_equilibrium(m, v)
+    fst_check = wfmoments.compute_fst_nei(eq, [0], [1])
+    assert np.isclose(
+        fst_check,
+        1 - wfmoments.compute_pi(eq, [0]) / wfmoments.compute_pi(eq, [0, 1])
+    )
+    mig_mat = np.zeros((4, 4))
+    mig_mat[0, 0] = -1000.002
+    mig_mat[0, 1] = 1000
+    mig_mat[0, 2] = 0.001
+    mig_mat[0, 3] = 0.001
+    mig_mat[1, 0] = 1000
+    mig_mat[1, 1] = -1000.002
+    mig_mat[1, 2] = 0.001
+    mig_mat[1, 3] = 0.001
+    mig_mat[2, 0] = 0.001
+    mig_mat[2, 1] = 0.001
+    mig_mat[2, 2] = -1000.002
+    mig_mat[2, 3] = 1000
+    mig_mat[3, 0] = 0.001
+    mig_mat[3, 1] = 0.001
+    mig_mat[3, 2] = 1000
+    mig_mat[3, 3] = -1000.002
+
+    m, v = wfmoments.build_arbitrary(1e-3, mig_mat)
+    eq = wfmoments.compute_equilibrium(m, v)
+    assert np.isclose(
+        wfmoments.compute_fst_nei(eq, [0], [2]),
+        wfmoments.compute_fst_nei(eq, [0, 1], [2, 3])
+    )
+    assert np.isclose(
+        wfmoments.compute_fst_nei(eq, [0], [1]), 0, atol=1e-3
+    )
+
+
+def test_compute_fst_hudson():
+    m, v = wfmoments.build_1d_spatial(1e-3, 1e-3, 2)
+    eq = wfmoments.compute_equilibrium(m, v)
+    fst_check = wfmoments.compute_fst_hudson(eq, [0], [1])
+    pi_w = wfmoments.compute_pi(eq, [0])
+    pi_t = wfmoments.compute_pi(eq, [0, 1])
+    pi_b = 2 * pi_t - pi_w
+    assert np.isclose(
+        fst_check, 1 - pi_w / pi_b
+    )
+    mig_mat = np.zeros((4, 4))
+    mig_mat[0, 0] = -1000.002
+    mig_mat[0, 1] = 1000
+    mig_mat[0, 2] = 0.001
+    mig_mat[0, 3] = 0.001
+    mig_mat[1, 0] = 1000
+    mig_mat[1, 1] = -1000.002
+    mig_mat[1, 2] = 0.001
+    mig_mat[1, 3] = 0.001
+    mig_mat[2, 0] = 0.001
+    mig_mat[2, 1] = 0.001
+    mig_mat[2, 2] = -1000.002
+    mig_mat[2, 3] = 1000
+    mig_mat[3, 0] = 0.001
+    mig_mat[3, 1] = 0.001
+    mig_mat[3, 2] = 1000
+    mig_mat[3, 3] = -1000.002
+
+    m, v = wfmoments.build_arbitrary(1e-3, mig_mat)
+    eq = wfmoments.compute_equilibrium(m, v)
+    assert np.isclose(
+        wfmoments.compute_fst_hudson(eq, [0], [2]),
+        wfmoments.compute_fst_hudson(eq, [0, 1], [2, 3])
+    )
+    assert np.isclose(
+        wfmoments.compute_fst_hudson(eq, [0], [1]), 0, atol=1e-3
+    )
+
+    m, v = wfmoments.build_1d_spatial(1e-3, 1e-3, 10)
+    eq = wfmoments.compute_equilibrium(m, v)
+    fst_check = wfmoments.compute_fst_hudson(eq, range(5), range(5, 10))
+    pi_w = (0.5 * wfmoments.compute_pi(eq, range(5))
+            + 0.5 * wfmoments.compute_pi(eq, range(5, 10)))
+    pi_t = wfmoments.compute_pi(eq, range(10))
+    pi_b = 2 * pi_t - pi_w
+    assert np.isclose(
+        fst_check, 1 - pi_w / pi_b
+    )
+
+
 def test_reseed():
     m, v = wfmoments.build_1d_spatial(1e-3, 1e-3, 2)
     eq = wfmoments.compute_equilibrium(m, v)
