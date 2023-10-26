@@ -324,3 +324,34 @@ def test_reseed():
     assert np.isclose(old_pi, new_pi)
     new_pi = wfmoments.compute_pi(reseeded, [0, 1])
     assert np.isclose(old_pi, new_pi)
+
+
+def test_get_moments_2d():
+    m, v = wfmoments.build_2d_spatial(1e-3, 1e-3, 1, 10)
+    moments = wfmoments.compute_equilibrium(m, v)
+
+    truth = wfmoments.get_moments(moments, list(range(9)))
+    extinction = np.zeros((1, 10), dtype=bool)
+    extinction[0, 9] = True
+    check = wfmoments.get_moments_2d(
+        moments, None, extinction
+    )
+    assert np.allclose(truth, check)
+
+    truth = wfmoments.get_moments(moments, list(range(8)))
+    second_extinction = np.zeros((1, 10), dtype=bool)
+    second_extinction[0, 9] = True
+    second_extinction[0, 8] = True
+    check = wfmoments.get_moments_2d(
+        check, extinction, second_extinction
+    )
+    assert np.allclose(truth, check)
+
+    truth = wfmoments.get_moments(moments, [0, 5])
+    extinction = np.ones((1, 10), dtype=bool)
+    extinction[0, 0] = False
+    extinction[0, 5] = False
+    check = wfmoments.get_moments_2d(
+        moments, None, extinction
+    )
+    assert np.allclose(truth, check)

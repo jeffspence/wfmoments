@@ -47,7 +47,7 @@ eq = wfmoments.compute_equilibrium(
 # Get out the pi across all 100 demes
 species_pi = wfmoments.compute_pi(
     curr_moments=eq,
-    demes= list(range(100))
+    demes=list(range(100))
 )
 
 # Get out the pi for the 50th deme:
@@ -65,7 +65,7 @@ deme_50_or_greater_pi = wfmoments.compute_pi(
 # Get the second moments for a subsample 50 demes
 new_moments = wfmoments.get_moments(
     curr_moments=eq,
-    demes= list(range(50, 100))
+    demes=list(range(50, 100))
 )
 
 # Set up a new migration model on just these 50 demes

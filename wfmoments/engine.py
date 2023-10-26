@@ -608,3 +608,54 @@ def get_moments(curr_moments, demes):
         old_idx = old_deme_to_idx[(i, j)]
         to_return[new_idx] = curr_moments[old_idx]
     return to_return
+
+
+def get_moments_2d(curr_moments, old_extinct_demes, new_extinct_demes):
+    """
+    Get the second moments for a subset of demes in a 2D landscape
+
+    Similar to get_moments, but specific to the 2D case where instead of
+    directly indexing demes, we may just want to use 2D maps of which demes are
+    extinct.
+
+    Args:
+        curr_moments: a 1d numpy array of the second moments of the allele
+            frequencies across all demes.
+        old_extinct_demes: numpy array of shape (xlen, ylen) where entry i, j
+            is True if the deme at spatial position i, j is currently extinct
+            otherwise False.
+        new_extinct_demes: same as old_extinct_demes, but with new demes that
+            have gone extinct. That is, before this time point, the extinction
+            pattern is specified by old_extinct_demes, and after this time
+            point the extinction pattern is specified by new_extinct_demes. We
+            require that demes cannot go from being extinct to not extinct (see
+            the reseed function if demes are going to become non-extinct).
+
+    Returns:
+        a 1d numpy array containing the second moments of the allele
+        frequencies across only pairs of demes that are not extinct in
+        new_extinct_demes.
+    """
+    assert (
+        old_extinct_demes is None
+        or old_extinct_demes.shape == new_extinct_demes.shape
+    )
+    assert (
+        old_extinct_demes is None
+        or not np.any(old_extinct_demes[~new_extinct_demes])
+    )
+    x_len, y_len = new_extinct_demes.shape
+
+    old_idx_to_xy, old_xy_to_idx = build_2d_index(
+        x_len, y_len, old_extinct_demes
+    )
+
+    new_idx_to_xy, new_xy_to_idx = build_2d_index(
+        x_len, y_len, new_extinct_demes
+    )
+
+    demes = []
+    for x, y in new_idx_to_xy:
+        demes.append(old_xy_to_idx[(x, y)])
+
+    return get_moments(curr_moments, demes)
