@@ -355,3 +355,17 @@ def test_get_moments_2d():
         moments, None, extinction
     )
     assert np.allclose(truth, check)
+
+    extinction = np.ones((1, 10), dtype=bool)
+    extinction[0, 0] = False
+    extinction[0, 3] = False
+    extinction[0, 5] = False
+    step = wfmoments.get_moments_2d(
+        moments, None, extinction
+    )
+    new_extinction = np.copy(extinction)
+    new_extinction[0, 3] = True
+    check = wfmoments.get_moments_2d(
+        step, extinction, new_extinction
+    )
+    assert np.allclose(truth, check)
