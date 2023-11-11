@@ -2,6 +2,7 @@
 import scipy.sparse
 import scipy.sparse.linalg
 import numpy as np
+from itertools import chain
 
 
 def build_deme_index(num_demes):
@@ -537,13 +538,13 @@ def reseed(indices_to_reseed, source_indices, curr_moments):
     Replace the individuals in a set of demes with individuals from other demes
 
     Takes a set of current second moments and computes what the second moments
-    would be if we were to replace all of the individuals in one set of demes
-    with a random sample of individuals from another set of demes.
+    would be if we were to replace all of the individuals in each set of target
+    demes with a random sample from the corresponding set of source demes.
 
     Args:
-        indices_to_reseed: a list of the demes whose individuals will be
-            replaced.
-        source_indices: a list of the demes from which to sample the
+        indices_to_reseed: a list of lists of the demes whose individuals
+            will be replaced.
+        source_indices: a list of lists of the demes from which to sample the
             individuals used to reseed the demes specified by
             indices_to_reseed.
         curr_moments: a 1d numpy array of the second moments of the allele
@@ -555,27 +556,47 @@ def reseed(indices_to_reseed, source_indices, curr_moments):
         indices_to_reseed have been replace by individuals chosen at random
         from source_indices.
     """
+    assert len(indices_to_reseed) == len(source_indices)
+    flat_target = list(chain.from_iterable(indices_to_reseed))
+    flat_source = list(chain.from_iterable(source_indices))
+    assert len(flat_target) == len(set(flat_target))
+    assert len(set(flat_target) & set(flat_source)) == 0
+
     curr_moments = np.copy(curr_moments)
     num_demes = num_demes_from_num_moments(len(curr_moments))
     idx_to_deme, deme_to_idx = build_deme_index(num_demes)
 
-    inner_moments = 0.
-    for i in source_indices:
-        for j in source_indices:
-            inner_moments += curr_moments[deme_to_idx[(i, j)]]
-    inner_moments /= len(source_indices)**2
+    inner_moments = np.zeros(
+        (len(source_indices), len(source_indices))
+    )
+    for idx1, source_index_set_1 in enumerate(source_indices):
+        for idx2, source_index_set_2 in enumerate(source_indices):
+            avg_moments = 0.
+            for i in source_index_set_1:
+                for j in source_index_set_2:
+                    avg_moments += curr_moments[deme_to_idx[(i, j)]]
+            avg_moments /= len(source_index_set_1)*len(source_index_set_2)
+            inner_moments[idx1, idx2] = avg_moments
 
-    for i in indices_to_reseed:
-        for k in range(num_demes):
-            curr_moments[deme_to_idx[(i, k)]] = 0.
-            if k in indices_to_reseed:
-                curr_moments[deme_to_idx[(i, k)]] = inner_moments
-            else:
-                for j in source_indices:
-                    curr_moments[deme_to_idx[(i, k)]] += (
-                        curr_moments[deme_to_idx[(j, k)]]
-                        / len(source_indices)
-                    )
+    target_map = {}
+    for idx, target_set in enumerate(indices_to_reseed):
+        for deme in target_set:
+            target_map[deme] = idx
+
+    for target_set in indices_to_reseed:
+        for i in target_set:
+            for k in range(num_demes):
+                curr_moments[deme_to_idx[(i, k)]] = 0.
+                if k in target_map:
+                    curr_moments[deme_to_idx[(i, k)]] = inner_moments[
+                        target_map[i], target_map[k]
+                    ]
+                else:
+                    for j in source_indices[target_map[i]]:
+                        curr_moments[deme_to_idx[(i, k)]] += (
+                            curr_moments[deme_to_idx[(j, k)]]
+                            / len(source_indices[target_map[i]])
+                        )
     return curr_moments
 
 
@@ -590,7 +611,9 @@ def get_moments(curr_moments, demes):
         curr_moments: a 1d numpy array of the second moments of the allele
             frequencies across all demes.
         demes: a list of the demes for which we want second moments that only
-            invole these demes
+            invole these demes. If an entry is None, then this is a new deme
+            not present in the current set of demes and all moments involving
+            this entry will be np.nan.
 
     Returns:
         a 1d numpy array containing the second moments of the allele
@@ -605,8 +628,11 @@ def get_moments(curr_moments, demes):
         new_i, new_j = new_idx_to_deme[new_idx]
         i = demes[new_i]
         j = demes[new_j]
-        old_idx = old_deme_to_idx[(i, j)]
-        to_return[new_idx] = curr_moments[old_idx]
+        if i is None or j is None:
+            to_return[new_idx] = np.nan
+        else:
+            old_idx = old_deme_to_idx[(i, j)]
+            to_return[new_idx] = curr_moments[old_idx]
     return to_return
 
 
@@ -624,12 +650,9 @@ def get_moments_2d(curr_moments, old_extinct_demes, new_extinct_demes):
         old_extinct_demes: numpy array of shape (xlen, ylen) where entry i, j
             is True if the deme at spatial position i, j is currently extinct
             otherwise False.
-        new_extinct_demes: same as old_extinct_demes, but with new demes that
-            have gone extinct. That is, before this time point, the extinction
-            pattern is specified by old_extinct_demes, and after this time
-            point the extinction pattern is specified by new_extinct_demes. We
-            require that demes cannot go from being extinct to not extinct (see
-            the reseed function if demes are going to become non-extinct).
+        new_extinct_demes: numpy array of shape (xlen, ylen) where entry i, j
+            is True if the deme at spatial position i, j will be extinct
+            after this event, othrwie False.
 
     Returns:
         a 1d numpy array containing the second moments of the allele
@@ -638,13 +661,17 @@ def get_moments_2d(curr_moments, old_extinct_demes, new_extinct_demes):
     """
     assert (
         old_extinct_demes is None
+        or new_extinct_demes is None
         or old_extinct_demes.shape == new_extinct_demes.shape
     )
-    assert (
-        old_extinct_demes is None
-        or not np.any(old_extinct_demes[~new_extinct_demes])
-    )
-    x_len, y_len = new_extinct_demes.shape
+
+    if old_extinct_demes is None and new_extinct_demes is None:
+        return curr_moments
+
+    if old_extinct_demes is None:
+        x_len, y_len = new_extinct_demes.shape
+    else:
+        x_len, y_len = old_extinct_demes.shape
 
     old_idx_to_xy, old_xy_to_idx = build_2d_index(
         x_len, y_len, old_extinct_demes
@@ -656,6 +683,9 @@ def get_moments_2d(curr_moments, old_extinct_demes, new_extinct_demes):
 
     demes = []
     for x, y in new_idx_to_xy:
-        demes.append(old_xy_to_idx[(x, y)])
+        if old_extinct_demes is None or not old_extinct_demes[x, y]:
+            demes.append(old_xy_to_idx[(x, y)])
+        else:
+            demes.append(None)
 
     return get_moments(curr_moments, demes)

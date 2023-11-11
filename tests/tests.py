@@ -315,7 +315,7 @@ def test_reseed():
     m, v = wfmoments.build_1d_spatial(1e-3, 1e-3, 2)
     eq = wfmoments.compute_equilibrium(m, v)
     old_pi = wfmoments.compute_pi(eq, [0])
-    reseeded = wfmoments.reseed([1], [0], eq)
+    reseeded = wfmoments.reseed([[1]], [[0]], eq)
     assert reseeded[0] == reseeded[2]
     assert np.isclose(reseeded[1], reseeded[0])
     new_pi = wfmoments.compute_pi(reseeded, [0])
@@ -324,6 +324,39 @@ def test_reseed():
     assert np.isclose(old_pi, new_pi)
     new_pi = wfmoments.compute_pi(reseeded, [0, 1])
     assert np.isclose(old_pi, new_pi)
+
+    m, v = wfmoments.build_1d_spatial(1e-3, 1e-3, 4)
+    eq = wfmoments.compute_equilibrium(m, v)
+    old_pi = wfmoments.compute_pi(eq, [2, 3])
+    reseeded = wfmoments.reseed([[0], [1]], [[2], [3]], eq)
+    assert np.isclose(reseeded[0], eq[7])
+    assert np.isclose(reseeded[4], eq[9])
+    assert np.isclose(reseeded[1], eq[8])
+    new_pi = wfmoments.compute_pi(reseeded, [0, 1])
+    assert np.isclose(old_pi, new_pi)
+    new_pi = wfmoments.compute_pi(reseeded, [2, 3])
+    assert np.isclose(old_pi, new_pi)
+    new_pi = wfmoments.compute_pi(reseeded, [0, 1, 2, 3])
+    assert np.isclose(old_pi, new_pi)
+
+
+def test_get_moments():
+    m, v = wfmoments.build_1d_spatial(1e-3, 1e-3, 2)
+    eq = wfmoments.compute_equilibrium(m, v)
+    assert len(eq) == 3
+    new_moments = wfmoments.get_moments(eq, [0])
+    assert len(new_moments) == 1
+    assert new_moments[0] == eq[0]
+    new_moments = wfmoments.get_moments(eq, [1])
+    assert len(new_moments) == 1
+    assert new_moments[0] == eq[2]
+    new_moments = wfmoments.get_moments(eq, [0, 1])
+    assert np.allclose(new_moments, eq)
+    new_moments = wfmoments.get_moments(eq, [1, 0])
+    assert np.allclose(new_moments[::-1], eq)
+    new_moments = wfmoments.get_moments(eq, [None, 0, 1])
+    assert np.all(np.isnan(new_moments[0:3]))
+    assert np.allclose(new_moments[3:], eq)
 
 
 def test_get_moments_2d():
@@ -369,3 +402,16 @@ def test_get_moments_2d():
         step, extinction, new_extinction
     )
     assert np.allclose(truth, check)
+
+    extinction = np.ones((3, 3), dtype=bool)
+    extinction[0, 0] = False
+    m, v = wfmoments.build_2d_spatial(
+        1e-3, 1e-3, 3, 3, extinct_demes=extinction
+    )
+    moments = wfmoments.compute_equilibrium(m, v)
+    assert len(moments) == 1
+    new_moments = wfmoments.get_moments_2d(
+        moments, extinction, None
+    )
+    assert new_moments[0] == moments[0]
+    assert np.all(np.isnan(new_moments[1:]))
