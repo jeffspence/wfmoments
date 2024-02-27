@@ -3,6 +3,7 @@ import scipy.sparse
 import scipy.sparse.linalg
 import numpy as np
 from itertools import chain
+from numba import njit
 
 
 def build_deme_index(num_demes):
@@ -325,6 +326,52 @@ def build_2d_laplace(xlen, ylen, m):
     return to_return
 
 
+@njit
+def _build_arbitrary(theta, m_mat, deme_pop_sizes):
+    to_return = {}
+    num_demes = m_mat.shape[0]
+
+    deme_to_idx = np.zeros((num_demes, num_demes), dtype=np.int64)
+    k = 0
+    for i in range(num_demes):
+        for j in range(i, num_demes):
+            deme_to_idx[i, j] = k
+            deme_to_idx[j, i] = k
+            k += 1
+
+    for i in range(num_demes):
+        for j in range(i, num_demes):
+            this_idx = deme_to_idx[i, j]
+            for k in range(num_demes):
+                ki_idx = deme_to_idx[k, i]
+                kj_idx = deme_to_idx[k, j]
+                to_return[(this_idx, ki_idx)] = 0.
+                to_return[(this_idx, kj_idx)] = 0.
+
+    for i in range(num_demes):
+        for j in range(i, num_demes):
+            this_idx = deme_to_idx[i, j]
+            to_return[(this_idx, this_idx)] = -2*theta
+            if i == j:
+                to_return[(this_idx, this_idx)] -= 1 / deme_pop_sizes[i]
+            for k in range(num_demes):
+                ki_idx = deme_to_idx[k, i]
+                kj_idx = deme_to_idx[k, j]
+                to_return[(this_idx, ki_idx)] += m_mat[k, j]
+                to_return[(this_idx, kj_idx)] += m_mat[k, i]
+
+    num_keys = len(to_return)
+    to_return_data = np.zeros(num_keys, dtype=np.float64)
+    to_return_i = np.zeros(num_keys, dtype=np.int64)
+    to_return_j = np.zeros(num_keys, dtype=np.int64)
+    for idx, (k, v) in enumerate(to_return.items()):
+        to_return_data[idx] = v
+        to_return_i[idx] = k[0]
+        to_return_j[idx] = k[1]
+
+    return (to_return_data, (to_return_i, to_return_j))
+
+
 def build_arbitrary(theta, m_mat, pop_sizes=1.):
     """
     Get the coefficients of the ODE system for an arbitrary deme model
@@ -357,21 +404,19 @@ def build_arbitrary(theta, m_mat, pop_sizes=1.):
     num_demes = m_mat.shape[0]
     idx_to_deme, deme_to_idx = build_deme_index(num_demes)
     sq_num_demes = len(idx_to_deme)
-    moment_mat = scipy.sparse.dok_matrix((sq_num_demes, sq_num_demes),
-                                         dtype=np.float64)
+    coo_data = _build_arbitrary(
+        theta, m_mat, deme_pop_sizes
+    )
+    moment_mat = scipy.sparse.coo_matrix(
+        coo_data,
+        shape=(sq_num_demes, sq_num_demes),
+        dtype=np.float64
+    )
+
     const_vec = np.ones(sq_num_demes, dtype=np.float64) * theta/2
     for i in range(num_demes):
-        for j in range(i, num_demes):
-            this_idx = deme_to_idx[(i, j)]
-            moment_mat[this_idx, this_idx] = -2*theta
-            if i == j:
-                moment_mat[this_idx, this_idx] -= 1 / deme_pop_sizes[i]
-                const_vec[this_idx] += 0.5 / deme_pop_sizes[i]
-            for k in range(num_demes):
-                ki_idx = deme_to_idx[(k, i)]
-                kj_idx = deme_to_idx[(k, j)]
-                moment_mat[this_idx, ki_idx] += m_mat[k, j]
-                moment_mat[this_idx, kj_idx] += m_mat[k, i]
+        this_idx = deme_to_idx[(i, i)]
+        const_vec[this_idx] += 0.5 / deme_pop_sizes[i]
 
     return moment_mat.tocsr(), const_vec
 
