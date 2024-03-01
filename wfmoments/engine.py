@@ -421,7 +421,7 @@ def build_arbitrary(theta, m_mat, pop_sizes=1.):
     return moment_mat.tocsr(), const_vec
 
 
-def compute_equilibrium(moment_mat, const_vec):
+def compute_equilibrium(moment_mat, const_vec, direct=False):
     """
     Get the equilibrium of a linear ODE
 
@@ -432,12 +432,17 @@ def compute_equilibrium(moment_mat, const_vec):
         moment_mat: the matrix of coefficients of the terms in the ODE that
             multiply x.
         const_vec: the vector of constant additive terms in the ODE.
+        direct: If true, use a direct solver (generally much slower), else
+            use an iterative solver.
 
     Returns:
         A 1d numpy array containing the equilibrium solution of the ODE
 
     """
-    return scipy.sparse.linalg.spsolve(moment_mat, -const_vec)
+    if direct:
+        return scipy.sparse.linalg.spsolve(moment_mat, -const_vec)
+    else:
+        return scipy.sparse.linalg.tfqmr(moment_mat, -const_vec, atol=0.)[0]
 
 
 def evolve_forward(moment_mat, const_vec, curr_moments, time):
