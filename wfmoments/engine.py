@@ -4,8 +4,11 @@ import scipy.sparse.linalg
 import numpy as np
 from itertools import chain
 from numba import njit
+from functools import cache
+from types import MappingProxyType
 
 
+@cache
 def build_deme_index(num_demes):
     """
     Creates a map to and from indices for vecorized second moments.
@@ -39,7 +42,7 @@ def build_deme_index(num_demes):
             to_return_inv[(i, j)] = len(to_return)
             to_return_inv[(j, i)] = len(to_return)
             to_return.append((i, j))
-    return to_return, to_return_inv
+    return tuple(to_return), MappingProxyType(to_return_inv)
 
 
 def build_1d_spatial(theta, migration_rate, num_demes, pop_sizes=1.):
@@ -474,6 +477,7 @@ def evolve_forward(moment_mat, const_vec, curr_moments, time):
     return evolved - m_inv_v
 
 
+@cache
 def num_demes_from_num_moments(k):
     """Get the number of demes from the number of second moments"""
     return int(round(0.5 * (np.sqrt(8*k + 1) - 1)))
@@ -489,7 +493,7 @@ def compute_pi(curr_moments, demes, weights=None):
         demes: a list of the demes from which individuals should be sampled.
         weights: a list of how much to weight each deme in computing pi (i.e.,
             the probability of sampling an individual from deme i will be
-            proportional to weights[i]. Should match total number of demes.
+            proportional to weights[i]. Should match len(demes)
 
     Returns:
         The average pairwise heterozygosity.
@@ -498,19 +502,18 @@ def compute_pi(curr_moments, demes, weights=None):
     idx_to_deme, deme_to_idx = build_deme_index(num_demes)
 
     if weights is None:
-        weights = np.zeros(num_demes)
-        weights[demes] = 1.
-    assert len(weights) == num_demes
+        weights = np.ones(len(demes))
+    assert len(weights) == len(demes)
     assert np.all(np.array(weights) >= 0.)
-    normalizer = np.sum(np.array(weights)[demes])**2
+    normalizer = sum(weights)**2
 
     total_pi = 0.
-    for i in demes:
-        for j in demes:
+    for i_idx, i in enumerate(demes):
+        for j_idx, j in enumerate(demes):
             this_moment = curr_moments[deme_to_idx[(i, j)]]
             total_pi += (
                 2 * (0.5 - this_moment)
-                * weights[i] * weights[j]
+                * weights[i_idx] * weights[j_idx]
                 / normalizer
             )
 
