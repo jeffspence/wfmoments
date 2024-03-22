@@ -489,7 +489,7 @@ def compute_pi(curr_moments, demes, weights=None):
         demes: a list of the demes from which individuals should be sampled.
         weights: a list of how much to weight each deme in computing pi (i.e.,
             the probability of sampling an individual from deme i will be
-            proportional to weights[i]
+            proportional to weights[i]. Should match total number of demes.
 
     Returns:
         The average pairwise heterozygosity.
@@ -498,10 +498,11 @@ def compute_pi(curr_moments, demes, weights=None):
     idx_to_deme, deme_to_idx = build_deme_index(num_demes)
 
     if weights is None:
-        weights = np.ones(len(demes))
-    assert len(weights) == len(demes)
-    assert np.all(np.array(weights) >= 0)
-    normalizer = np.sum(weights)**2
+        weights = np.zeros(num_demes)
+        weights[demes] = 1.
+    assert len(weights) == num_demes
+    assert np.all(np.array(weights) >= 0.)
+    normalizer = np.sum(np.array(weights)[demes])**2
 
     total_pi = 0.
     for i in demes:
