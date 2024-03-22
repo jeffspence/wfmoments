@@ -421,7 +421,7 @@ def build_arbitrary(theta, m_mat, pop_sizes=1.):
     return moment_mat.tocsr(), const_vec
 
 
-def compute_equilibrium(moment_mat, const_vec, direct=False):
+def compute_equilibrium(moment_mat, const_vec, direct=False, x0=None):
     """
     Get the equilibrium of a linear ODE
 
@@ -434,6 +434,7 @@ def compute_equilibrium(moment_mat, const_vec, direct=False):
         const_vec: the vector of constant additive terms in the ODE.
         direct: If true, use a direct solver (generally much slower), else
             use an iterative solver.
+        x0: Initial guess to pass to iterative solver. Defaults to None.
 
     Returns:
         A 1d numpy array containing the equilibrium solution of the ODE
@@ -442,7 +443,9 @@ def compute_equilibrium(moment_mat, const_vec, direct=False):
     if direct:
         return scipy.sparse.linalg.spsolve(moment_mat, -const_vec)
     else:
-        return scipy.sparse.linalg.tfqmr(moment_mat, -const_vec, atol=0.)[0]
+        return scipy.sparse.linalg.tfqmr(
+            moment_mat, -const_vec, x0=x0, atol=0.
+        )[0]
 
 
 def evolve_forward(moment_mat, const_vec, curr_moments, time):
@@ -476,7 +479,7 @@ def num_demes_from_num_moments(k):
     return int(round(0.5 * (np.sqrt(8*k + 1) - 1)))
 
 
-def compute_pi(curr_moments, demes):
+def compute_pi(curr_moments, demes, weights=None):
     """
     Compute the average heterozygosity from the second moments of demes
 
@@ -484,19 +487,31 @@ def compute_pi(curr_moments, demes):
         curr_moments: a 1d numpy array of the second moments of the allele
             frequencies across all demes
         demes: a list of the demes from which individuals should be sampled.
+        weights: a list of how much to weight each deme in computing pi (i.e.,
+            the probability of sampling an individual from deme i will be
+            proportional to weights[i]
 
     Returns:
-        The average pairwise heterozygosity when individuals are uniformly
-        sampled from the specified demes.
+        The average pairwise heterozygosity.
     """
     num_demes = num_demes_from_num_moments(len(curr_moments))
     idx_to_deme, deme_to_idx = build_deme_index(num_demes)
+
+    if weights is None:
+        weights = np.ones(len(demes))
+    assert len(weights) == len(demes)
+    assert np.all(np.array(weights) >= 0)
+    normalizer = np.sum(weights)**2
 
     total_pi = 0.
     for i in demes:
         for j in demes:
             this_moment = curr_moments[deme_to_idx[(i, j)]]
-            total_pi += 2 / (len(demes)**2) * (0.5 - this_moment)
+            total_pi += (
+                2 * (0.5 - this_moment)
+                * weights[i] * weights[j]
+                / normalizer
+            )
 
     return total_pi
 
