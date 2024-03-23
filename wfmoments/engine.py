@@ -424,7 +424,9 @@ def build_arbitrary(theta, m_mat, pop_sizes=1.):
     return moment_mat.tocsr(), const_vec
 
 
-def compute_equilibrium(moment_mat, const_vec, direct=False, x0=None):
+def compute_equilibrium(
+    moment_mat, const_vec, direct=False, x0=None, rtol=1e-7
+):
     """
     Get the equilibrium of a linear ODE
 
@@ -438,7 +440,7 @@ def compute_equilibrium(moment_mat, const_vec, direct=False, x0=None):
         direct: If true, use a direct solver (generally much slower), else
             use an iterative solver.
         x0: Initial guess to pass to iterative solver. Defaults to None.
-
+        rtol: Relative tolerance allowed in iterative solver.
     Returns:
         A 1d numpy array containing the equilibrium solution of the ODE
 
@@ -450,7 +452,7 @@ def compute_equilibrium(moment_mat, const_vec, direct=False, x0=None):
         idx = 0
         while status == 1 and idx < 100:
             x0, status = scipy.sparse.linalg.tfqmr(
-                moment_mat, -const_vec, x0=x0, atol=0., rtol=1e-7
+                moment_mat, -const_vec, x0=x0, atol=0., rtol=rtol
             )
             idx += 1
         return x0
