@@ -516,14 +516,15 @@ def compute_pi(curr_moments, demes, weights=None):
     for i_idx, i in enumerate(demes):
         for j_idx, j in enumerate(demes):
             this_moment = curr_moments[deme_to_idx[(i, j)]]
+            assert this_moment <= 0.5 + 1e-10, (i, j, this_moment)
             total_pi += (
                 2 * (0.5 - this_moment)
                 * weights[i_idx] * weights[j_idx]
                 / normalizer
             )
 
-    assert total_pi >= -1e-10
-    assert total_pi <= 1 + 1e-10
+    assert total_pi >= -1e-10, total_pi
+    assert total_pi <= 1 + 1e-10, total_pi
     return total_pi
 
 
