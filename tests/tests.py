@@ -164,6 +164,17 @@ def test_compute_equilibrium():
     assert np.allclose(eq, eq_check)
     assert np.all(eq <= 0.5)
     assert np.all(eq >= 0)
+    eq = wfmoments.compute_equilibrium(m, v, direct=True)
+    assert np.allclose(eq, eq_check)
+    assert np.all(eq <= 0.5)
+    assert np.all(eq >= 0)
+    for i in range(10):
+        x0 = np.random.random(v.shape[0]) * 500
+        eq = wfmoments.compute_equilibrium(m, v, direct=False, x0=x0)
+        assert np.allclose(eq, eq_check)
+        x0 = np.random.normal(scale=500, size=v.shape[0])
+        eq = wfmoments.compute_equilibrium(m, v, direct=False, x0=x0)
+        assert np.allclose(eq, eq_check)
 
     for i in range(10):
         theta = np.random.random()
@@ -195,6 +206,7 @@ def test_compute_pi():
     pi = wfmoments.compute_pi(eq, [0])
     assert np.isclose(pi, 2*(0.5 - eq[0]))
     assert pi > 0
+    pi = wfmoments.compute_pi(eq, [0], weights=[10])
 
     curr_pi = pi
     curr_theta = 1e-3
@@ -212,6 +224,16 @@ def test_compute_pi():
     assert np.all(eq < 0.5)
     pi = wfmoments.compute_pi(eq, [0, 1, 9])
     assert pi > 0
+
+    pi_0 = wfmoments.compute_pi(eq, [0])
+    e1 = np.zeros(10)
+    e1[0] = 1.
+    pi_0_check = wfmoments.compute_pi(eq, range(10), e1)
+    assert np.isclose(pi_0, pi_0_check)
+    e019 = np.zeros(10)
+    e019[[0, 1, 9]] = 100
+    pi_check = wfmoments.compute_pi(eq, range(10), e019)
+    assert np.isclose(pi, pi_check)
 
     curr_pi = pi
     curr_theta = 1e-1
@@ -231,6 +253,15 @@ def test_compute_fst_nei():
     assert np.isclose(
         fst_check,
         1 - wfmoments.compute_pi(eq, [0]) / wfmoments.compute_pi(eq, [0, 1])
+    )
+
+    fst_check_weight = wfmoments.compute_fst_nei(
+        eq, [0], [1], [0.999], [0.001]
+    )
+    assert np.isclose(
+        fst_check_weight,
+        1 - wfmoments.compute_pi(eq, [0])
+        / wfmoments.compute_pi(eq, [0, 1], [0.999, 0.001])
     )
     mig_mat = np.zeros((4, 4))
     mig_mat[0, 0] = -1000.002
@@ -259,6 +290,15 @@ def test_compute_fst_nei():
     assert np.isclose(
         wfmoments.compute_fst_nei(eq, [0], [1]), 0, atol=1e-3
     )
+    assert np.isclose(
+        wfmoments.compute_fst_nei(eq, [0], [2]),
+        wfmoments.compute_fst_nei(
+            eq, [0, 1], [2, 3], [0.25, 0.75], [0.75, 0.25]
+        )
+    )
+    assert np.isclose(
+        wfmoments.compute_fst_nei(eq, [0], [1], [100], [100]), 0, atol=1e-3
+    )
 
 
 def test_compute_fst_hudson():
@@ -271,6 +311,12 @@ def test_compute_fst_hudson():
     assert np.isclose(
         fst_check, 1 - pi_w / pi_b
     )
+
+    fst_check_weight = wfmoments.compute_fst_hudson(
+        eq, [0], [1], [10], [0.333]
+    )
+    assert np.isclose(fst_check_weight, 1 - pi_w / pi_b)
+
     mig_mat = np.zeros((4, 4))
     mig_mat[0, 0] = -1000.002
     mig_mat[0, 1] = 1000
@@ -308,6 +354,21 @@ def test_compute_fst_hudson():
     pi_b = 2 * pi_t - pi_w
     assert np.isclose(
         fst_check, 1 - pi_w / pi_b
+    )
+
+    w1 = np.random.random(5)
+    w2 = np.random.random(5)
+    w1 /= w1.sum()
+    w2 /= w2.sum()
+    fst_check_weight = wfmoments.compute_fst_hudson(
+        eq, range(5), range(5, 10), w1, w2
+    )
+    pi_w = (0.5 * wfmoments.compute_pi(eq, range(5), w1)
+            + 0.5 * wfmoments.compute_pi(eq, range(5, 10), w2))
+    pi_t = wfmoments.compute_pi(eq, range(10), list(w1) + list(w2))
+    pi_b = 2*pi_t - pi_w
+    assert np.isclose(
+        fst_check_weight, 1 - pi_w / pi_b
     )
 
 

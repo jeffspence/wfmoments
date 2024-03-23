@@ -448,9 +448,9 @@ def compute_equilibrium(moment_mat, const_vec, direct=False, x0=None):
     else:
         status = 1
         idx = 0
-        while status == 1 and idx < 10:
+        while status == 1 and idx < 100:
             x0, status = scipy.sparse.linalg.tfqmr(
-                moment_mat, -const_vec, x0=x0, atol=0.
+                moment_mat, -const_vec, x0=x0, atol=0., rtol=1e-7
             )
             idx += 1
         return x0
@@ -527,7 +527,9 @@ def compute_pi(curr_moments, demes, weights=None):
     return total_pi
 
 
-def compute_fst_hudson(curr_moments, demes_1, demes_2):
+def compute_fst_hudson(
+    curr_moments, demes_1, demes_2, weights_1=None, weights_2=None
+):
     """
     Compute Hudson's Fst between demes_1 and demes_2
 
@@ -538,41 +540,58 @@ def compute_fst_hudson(curr_moments, demes_1, demes_2):
             should be drawn.
         demes_2: a list of the demes from which the second set of individuals
             should be drawn.
+        weights_1: a list of len(demes_1) proportional to the probability of
+            sampling an individual from each deme
+        weights_2: a list of len(demes_2) proportional to the probabiliy of
+            sampling an individual from each deme.
+
 
     Returns:
         Hudson's Fst between the set of individuals in demes_1 and demes_2.
-        This estimator does not weight by population size, so pi_within is just
-        the average of pi in deme_1 and pi in deme_2.
+        When computing pi_within, we assume that we draw from each set of demes
+        with equal probability, but then within each set of demes, we draw
+        individuals from each deme with probability proportional to weights_i.
     """
 
     # make sure these are separate demes
     assert len(set(demes_1).intersection(set(demes_2))) == 0
 
-    curr_moments = np.copy(curr_moments)
+    if weights_1 is None:
+        weights_1 = np.ones(len(demes_1))
+    if weights_2 is None:
+        weights_2 = np.ones(len(demes_2))
 
-    pi_within_1 = compute_pi(curr_moments, demes_1)
-    pi_within_2 = compute_pi(curr_moments, demes_2)
+    assert len(weights_1) == len(demes_1)
+    assert len(weights_2) == len(demes_2)
+
+    pi_within_1 = compute_pi(curr_moments, demes_1, weights_1)
+    pi_within_2 = compute_pi(curr_moments, demes_2, weights_2)
     pi_within = 0.5 * (pi_within_1 + pi_within_2)
 
     num_demes = num_demes_from_num_moments(len(curr_moments))
     idx_to_deme, deme_to_idx = build_deme_index(num_demes)
     pi_between = 0.
-    for i in demes_1:
-        for j in demes_2:
+    normalizer = sum(weights_1) * sum(weights_2)
+    for i_idx, i in enumerate(demes_1):
+        for j_idx, j in enumerate(demes_2):
             # The next line of code is based on the following algebraic
             # simplification
             # E[p_1 * (1-p_2) + (1-p_1) * p_2]
             # = E[p_1 + p_2 - 2 * p_1 * p_2]
             # = 0.5 + 0.5 - 2 * second_moment
-            pi_between += 1 - 2 * curr_moments[deme_to_idx[(i, j)]]
+            pi_between += (
+                1 - 2 * curr_moments[deme_to_idx[(i, j)]]
+            ) * weights_1[i_idx] * weights_2[j_idx]
 
-    pi_between = pi_between / len(demes_1) / len(demes_2)
+    pi_between = pi_between / normalizer
     assert pi_between <= 1
     assert pi_between >= 0
     return 1. - pi_within / pi_between
 
 
-def compute_fst_nei(curr_moments, demes_1, demes_2):
+def compute_fst_nei(
+    curr_moments, demes_1, demes_2, weights_1=None, weights_2=None
+):
     """
     Compute Nei's Fst between demes_1 and demes_2
 
@@ -583,30 +602,39 @@ def compute_fst_nei(curr_moments, demes_1, demes_2):
             should be drawn.
         demes_2: a list of the demes from which the second set of individuals
             should be drawn.
+        weights_1: a list of len(demes_1) proportional to the probability of
+            sampling an individual from each deme
+        weights_2: a list of len(demes_2) proportional to the probabiliy of
+            sampling an individual from each deme.
 
     Returns:
-        Nei's Fst between the set of individuals in demes_1 and demes_2.
-        Assumes that the number of individuals is the same across all demes.
-        That is, pi_within and pi_total are weighted by the number of demes
-        within each set of demes.
+        Nei's Fst between the set of individuals in demes_1 and demes_2, where
+        the demes are weighted by weights_1 and weights_2 respectively.
     """
 
     # make sure these are separate demes
     assert len(set(demes_1).intersection(set(demes_2))) == 0
 
+    if weights_1 is None:
+        weights_1 = np.ones(len(demes_1))
+    if weights_2 is None:
+        weights_2 = np.ones(len(demes_2))
+
+    assert len(weights_1) == len(demes_1)
+    assert len(weights_2) == len(demes_2)
+
     all_demes = list(demes_1) + list(demes_2)
+    all_weights = list(weights_1) + list(weights_2)
 
-    curr_moments = np.copy(curr_moments)
-
-    pi_within_1 = compute_pi(curr_moments, demes_1)
-    pi_within_2 = compute_pi(curr_moments, demes_2)
+    pi_within_1 = compute_pi(curr_moments, demes_1, weights_1)
+    pi_within_2 = compute_pi(curr_moments, demes_2, weights_2)
 
     pi_within = (
-        pi_within_1 * len(demes_1) / len(all_demes)
-        + pi_within_2 * len(demes_2) / len(all_demes)
+        pi_within_1 * sum(weights_1) / sum(all_weights)
+        + pi_within_2 * sum(weights_2) / sum(all_weights)
     )
 
-    pi_total = compute_pi(curr_moments, all_demes)
+    pi_total = compute_pi(curr_moments, all_demes, all_weights)
 
     return 1. - pi_within / pi_total
 
