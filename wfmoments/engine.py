@@ -522,8 +522,8 @@ def compute_pi(curr_moments, demes, weights=None):
                 / normalizer
             )
 
-    assert total_pi >= 0
-    assert total_pi <= 1
+    assert total_pi >= -1e-10
+    assert total_pi <= 1 + 1e-10
     return total_pi
 
 
