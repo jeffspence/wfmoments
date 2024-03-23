@@ -446,9 +446,14 @@ def compute_equilibrium(moment_mat, const_vec, direct=False, x0=None):
     if direct:
         return scipy.sparse.linalg.spsolve(moment_mat, -const_vec)
     else:
-        return scipy.sparse.linalg.tfqmr(
-            moment_mat, -const_vec, x0=x0, atol=0.
-        )[0]
+        status = 1
+        idx = 0
+        while status == 1 and idx < 10:
+            x0, status = scipy.sparse.linalg.tfqmr(
+                moment_mat, -const_vec, x0=x0, atol=0.
+            )
+            idx += 1
+        return x0
 
 
 def evolve_forward(moment_mat, const_vec, curr_moments, time):
@@ -517,6 +522,8 @@ def compute_pi(curr_moments, demes, weights=None):
                 / normalizer
             )
 
+    assert total_pi >= 0
+    assert total_pi <= 1
     return total_pi
 
 
@@ -560,6 +567,8 @@ def compute_fst_hudson(curr_moments, demes_1, demes_2):
             pi_between += 1 - 2 * curr_moments[deme_to_idx[(i, j)]]
 
     pi_between = pi_between / len(demes_1) / len(demes_2)
+    assert pi_between <= 1
+    assert pi_between >= 0
     return 1. - pi_within / pi_between
 
 
