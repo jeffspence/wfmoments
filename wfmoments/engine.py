@@ -399,7 +399,7 @@ def build_arbitrary(theta, m_mat, pop_sizes=1.):
     assert np.all(pop_sizes > 0.)
     assert len(m_mat.shape) == 2
     assert m_mat.shape[0] == m_mat.shape[1]
-    assert np.allclose(m_mat.sum(axis=1), 0)
+    assert np.allclose(m_mat.sum(axis=0), 0)
 
     deme_pop_sizes = np.zeros(m_mat.shape[0])
     deme_pop_sizes[:] = pop_sizes

@@ -1,5 +1,6 @@
-import wfmoments
+import wfmoments.engine as wfmoments
 import numpy as np
+import scipy.sparse
 
 
 def test_build_deme_index():
@@ -210,6 +211,36 @@ def test_build_1d_laplace():
     m = wfmoments.build_1d_laplace(10, 0.1)
     assert np.allclose(m.dot(np.ones(10)), 0)
     assert np.allclose(m.T.dot(np.ones(10)), 0)
+
+
+def test_asymmetric():
+    good_test = False
+    for i in range(10):
+        s = np.random.random(10) * 1000
+        m = np.random.random((10, 10))
+        m *= np.outer(s, 1/s)
+        m[np.arange(10), np.arange(10)] = 0.
+        m[np.arange(10), np.arange(10)] = -m.sum(axis=0)
+        moment_mat, v = wfmoments.build_arbitrary(1e-3, m)
+        eq = wfmoments.compute_equilibrium(moment_mat, v)
+        assert np.all(eq > 0)
+        assert np.all(eq < 0.5)
+
+        m[np.arange(10), np.arange(10)] = 0.
+        m[np.arange(10), np.arange(10)] = -m.sum(axis=1)
+
+        deme_pop_sizes = np.ones(10)
+        sq_num_demes = 55
+        coo_data = wfmoments._build_arbitrary(1e-3, m, deme_pop_sizes)
+        moment_mat = scipy.sparse.coo_matrix(
+            coo_data,
+            shape=(sq_num_demes, sq_num_demes),
+            dtype=np.float64
+        )
+        eq = wfmoments.compute_equilibrium(moment_mat, v)
+        good_test = good_test or np.any(eq < 0)
+        good_test = good_test or np.any(eq > 0.5)
+    assert good_test
 
 
 def test_compute_pi():
