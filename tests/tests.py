@@ -156,6 +156,14 @@ def test_evolve_forward():
         curr_den *= (i+1)
     assert np.allclose(check_vec, medium_x)
 
+    m_1 = wfmoments.evolve_forward(m, v, x, 1)
+    m_2 = wfmoments.evolve_forward(m, v, x, 1, eq=equilibrium)
+    m_3 = wfmoments.evolve_forward(m, v, x, 1, eq_x0=x, eq_rtol=1e-10)
+    m_4 = wfmoments.evolve_forward(m, v, x, 1, eq_direct=True)
+    assert np.allclose(m_1, m_2)
+    assert np.allclose(m_1, m_3)
+    assert np.allclose(m_1, m_4)
+
 
 def test_compute_equilibrium():
     m, v = wfmoments.build_1d_spatial(1e-4, 1e-2, 2)
@@ -170,10 +178,14 @@ def test_compute_equilibrium():
     assert np.all(eq >= 0)
     for i in range(10):
         x0 = np.random.random(v.shape[0]) * 500
-        eq = wfmoments.compute_equilibrium(m, v, direct=False, x0=x0)
+        eq = wfmoments.compute_equilibrium(
+            m, v, direct=False, x0=x0, rtol=1e-10
+        )
         assert np.allclose(eq, eq_check)
         x0 = np.random.normal(scale=500, size=v.shape[0])
-        eq = wfmoments.compute_equilibrium(m, v, direct=False, x0=x0)
+        eq = wfmoments.compute_equilibrium(
+            m, v, direct=False, x0=x0, rtol=1e-10
+        )
         assert np.allclose(eq, eq_check)
 
     for i in range(10):

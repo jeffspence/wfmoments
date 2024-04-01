@@ -458,7 +458,16 @@ def compute_equilibrium(
         return x0
 
 
-def evolve_forward(moment_mat, const_vec, curr_moments, time):
+def evolve_forward(
+    moment_mat,
+    const_vec,
+    curr_moments,
+    time,
+    eq=None,
+    eq_direct=False,
+    eq_x0=None,
+    eq_rtol=1e-7,
+):
     """
     Solve an ODE forward for a set amount of time
 
@@ -472,12 +481,22 @@ def evolve_forward(moment_mat, const_vec, curr_moments, time):
         const_vec: the vector of constant additive terms in the ODE.
         curr_moments: the current second moments of the model
         time: the amount of time to integrate the ODE forward
+        eq: the equilibrium for this moment_mat and const_vec. Passing will
+            speed up computation
+        eq_direct: Passed as direct to compute_equilibrium if no eq provided.
+        eq_x0: Passed as x0 to compute_equilibrium if no eq provided.
+        eq_rtol: Passed as rtol to compute_equilibrium if no eq provided.
 
     Returns:
         A 1d numpy array containing the second moments after evolving forward
         for time amount of time.
     """
-    m_inv_v = -compute_equilibrium(moment_mat, const_vec)
+    if eq is None:
+        m_inv_v = -compute_equilibrium(
+            moment_mat, const_vec, direct=eq_direct, x0=eq_x0, rtol=eq_rtol
+        )
+    else:
+        m_inv_v = -eq
     evolved = scipy.sparse.linalg.expm_multiply(
         moment_mat * time, curr_moments + m_inv_v
     )
