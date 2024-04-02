@@ -237,9 +237,16 @@ def test_asymmetric():
             shape=(sq_num_demes, sq_num_demes),
             dtype=np.float64
         )
-        eq = wfmoments.compute_equilibrium(moment_mat, v)
-        good_test = good_test or np.any(eq < 0)
-        good_test = good_test or np.any(eq > 0.5)
+        x0 = None
+        status = 1
+        idx = 0
+        while status == 1 and idx < 100:
+            x0, status = scipy.sparse.linalg.tfqmr(
+                moment_mat, -eq, x0=x0, atol=0., rtol=1e-7
+            )
+            idx += 1
+        good_test = good_test or np.any(x0 < 0)
+        good_test = good_test or np.any(x0 > 0.5)
     assert good_test
 
 

@@ -455,7 +455,10 @@ def compute_equilibrium(
                 moment_mat, -const_vec, x0=x0, atol=0., rtol=rtol
             )
             idx += 1
-        return x0
+            if x0.max() > (0.5+rtol) or x0.min() < (0.-rtol):
+                status = 1
+
+        return x0.clip(0, 0.5)
 
 
 def evolve_forward(
