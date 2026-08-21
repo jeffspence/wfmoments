@@ -450,14 +450,27 @@ def compute_equilibrium(
     else:
         status = 1
         idx = 0
-        while status == 1 and idx < 100:
+        M = None
+        while (x0 is None or status == 1) and idx < 100:
             x0, status = scipy.sparse.linalg.tfqmr(
-                moment_mat, -const_vec, x0=x0, atol=0., rtol=rtol
+                moment_mat, -const_vec, x0=x0, atol=0., rtol=rtol, M=M
             )
-            idx += 1
-            if x0.max() > (0.5+rtol) or x0.min() < (0.-rtol):
+            if np.any(np.isnan(x0)):
                 status = 1
-
+                x0 = None
+                if M is None:
+                    ilu = scipy.sparse.linalg.spilu(moment_mat)
+                    M = scipy.sparse.linalg.LinearOperator(
+                        moment_mat.shape,
+                        matvec=lambda x: ilu.solve(x)
+                    )
+                else:
+                    break
+            elif x0.max() > (0.5+rtol) or x0.min() < (0.-rtol):
+                status = 1
+            idx += 1
+        if np.any(np.isnan(x0)):
+            return compute_equilibrium(moment_mat, const_vec, direct)
         return x0.clip(0, 0.5)
 
 
